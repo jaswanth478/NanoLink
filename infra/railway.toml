@@ -1,0 +1,23 @@
+[project]
+name = "short-url-service"
+
+[services.web]
+build = "uv pip install -r requirements.txt"
+command = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+source = "./"
+numReplicas = 3
+healthcheckPath = "/health/live"
+envFile = "config/.env"
+
+[services.web.autoscaling]
+minReplicas = 2
+maxReplicas = 10
+cpuThreshold = 70
+requestsPerSecond = 200
+cooldownSeconds = 300
+
+[services.worker]
+command = "python workers/click_consumer.py"
+source = "./"
+numReplicas = 1
+envFile = "config/.env"
