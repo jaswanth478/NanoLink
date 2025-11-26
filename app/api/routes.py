@@ -20,8 +20,41 @@ async def liveness() -> HealthResponse:
 
 @router.get("/health/ready", response_model=HealthResponse)
 async def readiness(service: ShortenerService = Depends(get_shortener_service)) -> HealthResponse:
-    await service.db.execute(text("SELECT 1"))
-    await service.cache.client.ping()
+    from config.settings import get_settings
+    
+    settings = get_settings()
+    db_url = settings.database_url
+    
+    # Check if database URL is in correct format
+    if not db_url.startswith("postgresql+asyncpg://"):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database URL must start with 'postgresql+asyncpg://', got: {db_url[:30]}..."
+        )
+    
+    # Check if SSL mode is set (Railway requires it)
+    if "sslmode" not in db_url:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database URL missing '?sslmode=require' - Railway Postgres requires SSL"
+        )
+    
+    try:
+        await service.db.execute(text("SELECT 1"))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Database connection failed: {str(e)}"
+        )
+    
+    try:
+        await service.cache.client.ping()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Redis connection failed: {str(e)}"
+        )
+    
     return HealthResponse(status="ready")
 
 
