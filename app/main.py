@@ -20,7 +20,7 @@ configure_logging(settings.log_level)
 
 app = FastAPI(title=settings.app_name)
 
-allowed_origins = settings.allowed_origins or ["https://nanourl.up.railway.app/"]
+allowed_origins = settings.allowed_origins or ["https://nanourl.up.railway.app"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
