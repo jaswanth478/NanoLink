@@ -23,7 +23,7 @@ app = FastAPI(title=settings.app_name)
 allowed_origins = settings.allowed_origins or ["https://nanourl.up.railway.app"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=["https://nanourl.up.railway.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
