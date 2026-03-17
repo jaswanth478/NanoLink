@@ -1,4 +1,5 @@
 from unittest.mock import AsyncMock, Mock
+import hashlib
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -79,3 +80,45 @@ async def test_create_short_url_retries_on_integrity_error():
     assert db.commit.await_count == 2
     assert db.rollback.await_count == 1
     cache.set.assert_awaited_once_with("second", result)
+
+
+@pytest.mark.anyio
+async def test_create_short_url_same_url_returns_same_code():
+    """Test that the same URL always produces the same short code (true idempotency)"""
+    db = AsyncMock()
+    db.add = Mock()
+    cache = AsyncMock()
+    click_logger = AsyncMock()
+    idempotency_store = AsyncMock()
+
+    url = "https://google.com"
+    expected_idem_key = hashlib.md5(url.encode()).hexdigest()
+
+    # First call returns None (cache miss), second call returns cached result
+    idempotency_store.get.side_effect = [None, {"short_code": "abc123", "original_url": url}]
+    service = ShortenerService(db, cache, click_logger, idempotency_store)
+    service._generate_unique_code = AsyncMock(return_value="abc123")
+
+    # First request
+    result1 = await service.create_short_url(
+        original_url=url,
+        client_ip="1.1.1.1",
+        custom_alias=None,
+        idempotency_key=None,
+    )
+
+    # Second request with same URL (no explicit idempotency_key)
+    result2 = await service.create_short_url(
+        original_url=url,
+        client_ip="2.2.2.2",
+        custom_alias=None,
+        idempotency_key=None,
+    )
+
+    # Both should return same short code
+    assert result1["short_code"] == "abc123"
+    assert result2["short_code"] == "abc123"
+    
+    # Idempotency key should be based on URL hash
+    assert idempotency_store.get.call_count == 2
+    idempotency_store.get.assert_any_call(expected_idem_key)
