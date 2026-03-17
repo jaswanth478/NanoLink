@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Optional
+import hashlib
 
 from datetime import datetime, timezone
 
@@ -36,10 +37,12 @@ class ShortenerService:
         custom_alias: str | None,
         idempotency_key: str | None,
     ) -> dict:
-        if idempotency_key:
-            cached = await self.idempotency_store.get(idempotency_key)
-            if cached:
-                return cached
+        if not idempotency_key:
+            idempotency_key = hashlib.md5(original_url.encode()).hexdigest()
+        
+        cached = await self.idempotency_store.get(idempotency_key)
+        if cached:
+            return cached
 
         short_code = custom_alias or await self._generate_unique_code()
         while True:
